@@ -7,7 +7,7 @@ class ScreenshotApp:
     def __init__(self):
         self.root = tk.Tk()
         self.root.title("Screenshot")
-        self.root.geometry("300x100")
+        self.root.geometry("300x50")
 
         self.screenshot_dir = "screenshots"
         os.makedirs(self.screenshot_dir, exist_ok=True)
@@ -17,8 +17,6 @@ class ScreenshotApp:
             text="Take Screenshot",
             command=self.take_screenshot,
             font=("Arial", 14),
-            bg="#4CAF50",
-            fg="white",
             relief="raised",
             padx=20,
             pady=10
