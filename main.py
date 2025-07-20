@@ -2,13 +2,9 @@ import tkinter as tk
 from tkinter import scrolledtext
 from datetime import datetime
 import os
-import base64
 from PIL import ImageGrab
-from openai import OpenAI
-from dotenv import load_dotenv
+import pytesseract
 import threading
-
-load_dotenv()
 
 class ScreenshotApp:
     def __init__(self):
@@ -19,11 +15,11 @@ class ScreenshotApp:
         self.screenshot_dir = "screenshots"
         os.makedirs(self.screenshot_dir, exist_ok=True)
 
-        self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        pytesseract.pytesseract.tesseract_cmd = r'/opt/homebrew/bin/tesseract'
 
         tk.Button(
             self.root,
-            text="Take screenshot",
+            text="Take Screenshot",
             command=self.take_screenshot,
             font=("Arial", 14),
             relief="raised",
@@ -35,9 +31,10 @@ class ScreenshotApp:
 
     def _create_result_window(self):
         self.result_window = tk.Toplevel(self.root)
-        self.result_window.title("Ocr2Gpt")
+        self.result_window.title("Ocr2Text")
         self.result_window.geometry("600x500")
         self.result_window.protocol("WM_DELETE_WINDOW", self._on_result_window_close)
+
         self.text_widget = scrolledtext.ScrolledText(
             self.result_window,
             wrap=tk.WORD,
@@ -46,6 +43,31 @@ class ScreenshotApp:
             pady=10
         )
         self.text_widget.pack(fill=tk.BOTH, expand=True, padx=10, pady=(10, 5))
+
+        button_frame = tk.Frame(self.result_window)
+        button_frame.pack(pady=(0, 10))
+
+        copy_button = tk.Button(
+            button_frame,
+            text="Copy All Text",
+            command=self._copy_all_text,
+            font=("Arial", 12),
+            relief="raised",
+            padx=10,
+            pady=5
+        )
+        copy_button.pack(side=tk.LEFT, padx=(0, 5))
+
+        clear_button = tk.Button(
+            button_frame,
+            text="Clear",
+            command=self._clear_text,
+            font=("Arial", 12),
+            relief="raised",
+            padx=10,
+            pady=5
+        )
+        clear_button.pack(side=tk.LEFT, padx=(5, 0))
 
         self._add_result("OCR results will be displayed here.\n")
 
@@ -57,6 +79,34 @@ class ScreenshotApp:
         self.text_widget.insert(tk.END, text)
         self.text_widget.config(state=tk.DISABLED)
         self.text_widget.see(tk.END)
+
+    def _copy_all_text(self):
+        try:
+            all_text = self.text_widget.get("1.0", tk.END).strip()
+            self.root.clipboard_clear()
+            self.root.clipboard_append(all_text)
+            self.root.update()
+            self._show_copy_feedback()
+        except Exception as e:
+            print(f"Copy error: {e}")
+
+    def _show_copy_feedback(self):
+        feedback_label = tk.Label(
+            self.result_window,
+            text="✓ Text copied to clipboard.",
+            font=("Arial", 10),
+            fg="green",
+            bg=self.result_window.cget("bg")
+        )
+        feedback_label.pack(pady=(0, 5))
+
+        self.root.after(2000, feedback_label.destroy)
+
+    def _clear_text(self):
+        self.text_widget.config(state=tk.NORMAL)
+        self.text_widget.delete("1.0", tk.END)
+        self.text_widget.config(state=tk.DISABLED)
+        self._add_result("OCR results will be displayed here.\n")
 
     def take_screenshot(self):
         self.result_window.deiconify()
@@ -71,52 +121,34 @@ class ScreenshotApp:
             screenshot.save(filepath)
 
             timestamp = datetime.now().strftime("%H:%M:%S")
-            self._add_result(f"\n=================================================================\n[{timestamp}] Screenshot saved: {filename}\n")
-            self._add_result("Processing OCR...\n=================================================================\n\n")
+            self._add_result(f"\n{'='*65}\n[{timestamp}] Screenshot saved: {filename}\n")
+            self._add_result("Running OCR...\n" + "="*65 + "\n\n")
 
-            threading.Thread(target=self._process_with_chatgpt, args=(filepath,), daemon=True).start()
+            threading.Thread(target=self._process_with_ocr, args=(filepath,), daemon=True).start()
 
         except Exception as e:
-            error_msg = f"Failed to take screenshot: {str(e)}"
-            self._add_result(f"Error: {error_msg}\n")
+            self._add_result(f"Error: Failed to take screenshot: {str(e)}\n")
         finally:
             self.root.deiconify()
 
-    def _process_with_chatgpt(self, image_path):
+    def _process_with_ocr(self, image_path):
         try:
-            with open(image_path, "rb") as image_file:
-                base64_image = base64.b64encode(image_file.read()).decode('utf-8')
+            from PIL import Image
+            image = Image.open(image_path)
+            ocr_text = pytesseract.image_to_string(image, lang='eng+jpn')
 
-            response = self.client.chat.completions.create(
-                model="gpt-4o",
-                messages=[
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": f"{os.getenv('PROMPT')}"
-                            },
-                            {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": f"data:image/png;base64,{base64_image}"
-                                }
-                            }
-                        ]
-                    }
-                ],
-                max_tokens=1000
-            )
+            cleaned_text = '\n'.join(line.strip() for line in ocr_text.split('\n') if line.strip())
 
-            result_text = response.choices[0].message.content
             timestamp = datetime.now().strftime("%H:%M:%S")
-            self.root.after(0, self._add_result, f"[{timestamp}] OCR Result:\n{result_text}\n")
+            if cleaned_text:
+                self.root.after(0, self._add_result, f"[{timestamp}] OCR Result:\n{cleaned_text}\n")
+            else:
+                self.root.after(0, self._add_result, f"[{timestamp}] OCR Result: No text detected.\n")
+
             self.root.after(0, self._add_result, "-" * 50 + "\n")
 
         except Exception as e:
-            error_msg = f"Error processing ChatGPT API: {str(e)}"
-            self.root.after(0, self._add_result, f"Error: {error_msg}\n")
+            self.root.after(0, self._add_result, f"Error: OCR processing failed: {str(e)}\n")
 
 if __name__ == "__main__":
     ScreenshotApp().root.mainloop()
