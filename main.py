@@ -47,6 +47,8 @@ class ScreenshotApp:
         )
         self.text_widget.pack(fill=tk.BOTH, expand=True, padx=10, pady=(10, 5))
 
+        self._add_result("OCR results will be displayed here.\n")
+
     def _on_result_window_close(self):
         self.result_window.withdraw()
 
