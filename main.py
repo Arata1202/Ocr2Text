@@ -63,6 +63,17 @@ class ScreenshotApp:
         )
         copy_button.pack(side=tk.LEFT, padx=(0, 5))
 
+        copy_prompt_button = tk.Button(
+            button_frame,
+            text="Copy Prompt",
+            command=self._copy_prompt,
+            font=("Arial", 12),
+            relief="raised",
+            padx=10,
+            pady=5
+        )
+        copy_prompt_button.pack(side=tk.LEFT, padx=(5, 0))
+
         clear_button = tk.Button(
             button_frame,
             text="Clear",
@@ -120,6 +131,30 @@ class ScreenshotApp:
 
         self.root.after(2000, feedback_label.destroy)
 
+    def _copy_prompt(self):
+        try:
+            prompt_text = PROMPT.strip() if PROMPT.strip() else ""
+            combined_text = f"{prompt_text}"
+
+            self.root.clipboard_clear()
+            self.root.clipboard_append(combined_text)
+            self.root.update()
+            self._show_prompt_copy_feedback()
+        except Exception as e:
+            print(f"Copy prompt error: {e}")
+
+    def _show_prompt_copy_feedback(self):
+        feedback_label = tk.Label(
+            self.result_window,
+            text="✓ Prompt + Text copied to clipboard.",
+            font=("Arial", 10),
+            fg="blue",
+            bg=self.result_window.cget("bg")
+        )
+        feedback_label.pack(pady=(0, 5))
+
+        self.root.after(2000, feedback_label.destroy)
+
     def _save_as_md(self):
         try:
             all_text = self.text_widget.get("1.0", tk.END).strip()
@@ -134,6 +169,11 @@ class ScreenshotApp:
             with open(filepath, 'w', encoding='utf-8') as f:
                 f.write("# OCR Results\n\n")
                 f.write(f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+
+                if PROMPT.strip():
+                    f.write("## Prompt\n\n")
+                    f.write(f"{PROMPT.strip()}\n\n")
+
                 f.write("## Extracted Text\n\n")
                 f.write("```\n")
                 f.write(all_text)
