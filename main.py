@@ -18,7 +18,9 @@ class ScreenshotApp:
 
         pytesseract.pytesseract.tesseract_cmd = r'/opt/homebrew/bin/tesseract'
 
-        tk.Button(
+        self.is_processing = False
+
+        self.screenshot_button = tk.Button(
             self.root,
             text="Take Screenshot",
             command=self.take_screenshot,
@@ -26,7 +28,8 @@ class ScreenshotApp:
             relief="raised",
             padx=20,
             pady=10
-        ).pack(pady=20)
+        )
+        self.screenshot_button.pack(pady=20)
 
         self._create_result_window()
 
@@ -111,12 +114,17 @@ class ScreenshotApp:
         self._add_result("OCR results will be displayed here.\n")
 
     def take_screenshot(self):
+        if self.is_processing:
+            return
+
         self.result_window.deiconify()
         self.root.withdraw()
         self.root.after(500, self._capture_screen)
 
     def _capture_screen(self):
         try:
+            self._set_processing_state(True)
+
             screenshot = ImageGrab.grab()
             filename = datetime.now().strftime("screenshot_%Y%m%d_%H%M%S.png")
             filepath = os.path.join(self.screenshot_dir, filename)
@@ -130,6 +138,7 @@ class ScreenshotApp:
 
         except Exception as e:
             self._add_result(f"Error: Failed to take screenshot: {str(e)}\n")
+            self._set_processing_state(False)
         finally:
             self.root.deiconify()
 
@@ -151,6 +160,21 @@ class ScreenshotApp:
 
         except Exception as e:
             self.root.after(0, self._add_result, f"Error: OCR processing failed: {str(e)}\n")
+        finally:
+            self.root.after(0, self._set_processing_state, False)
+
+    def _set_processing_state(self, is_processing):
+        self.is_processing = is_processing
+        if is_processing:
+            self.screenshot_button.config(
+                text="Processing OCR...",
+                state="disabled"
+            )
+        else:
+            self.screenshot_button.config(
+                text="Take Screenshot",
+                state="normal"
+            )
 
 if __name__ == "__main__":
     ScreenshotApp().root.mainloop()
