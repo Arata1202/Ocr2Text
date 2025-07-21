@@ -14,6 +14,7 @@ class ScreenshotApp:
         self.root.geometry("300x80")
 
         self.screenshot_dir = "screenshots"
+        self.output_dir = "output"
         os.makedirs(self.screenshot_dir, exist_ok=True)
 
         pytesseract.pytesseract.tesseract_cmd = r'/opt/homebrew/bin/tesseract'
@@ -73,7 +74,19 @@ class ScreenshotApp:
         )
         clear_button.pack(side=tk.LEFT, padx=(5, 0))
 
-        self._add_result("OCR results will be displayed here.\n")
+        save_md_button = tk.Button(
+            button_frame,
+            text="Save as MD",
+            command=self._save_as_md,
+            font=("Arial", 12),
+            relief="raised",
+            padx=10,
+            pady=5
+        )
+        save_md_button.pack(side=tk.LEFT, padx=(5, 0))
+
+        self._add_result("Press the 'Take Screenshot' button to start OCR.\n")
+        self._add_result("OCR results will be displayed below.\n")
 
     def _on_result_window_close(self):
         self.result_window.withdraw()
@@ -107,11 +120,47 @@ class ScreenshotApp:
 
         self.root.after(2000, feedback_label.destroy)
 
+    def _save_as_md(self):
+        try:
+            all_text = self.text_widget.get("1.0", tk.END).strip()
+            if not all_text or all_text == "OCR results will be displayed below.":
+                self._show_save_feedback("No content to save.", "orange")
+                return
+
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"ocr_results_{timestamp}.md"
+            filepath = os.path.join(self.output_dir, filename)
+
+            with open(filepath, 'w', encoding='utf-8') as f:
+                f.write("# OCR Results\n\n")
+                f.write(f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+                f.write("## Extracted Text\n\n")
+                f.write("```\n")
+                f.write(all_text)
+                f.write("\n```\n")
+
+            self._show_save_feedback(f"✓ Saved as {filename}", "green")
+        except Exception as e:
+            self._show_save_feedback(f"Error saving file: {str(e)}", "red")
+
+    def _show_save_feedback(self, message, color):
+        feedback_label = tk.Label(
+            self.result_window,
+            text=message,
+            font=("Arial", 10),
+            fg=color,
+            bg=self.result_window.cget("bg")
+        )
+        feedback_label.pack(pady=(0, 5))
+
+        self.root.after(3000, feedback_label.destroy)
+
     def _clear_text(self):
         self.text_widget.config(state=tk.NORMAL)
         self.text_widget.delete("1.0", tk.END)
         self.text_widget.config(state=tk.DISABLED)
-        self._add_result("OCR results will be displayed here.\n")
+        self._add_result("OCR results will be displayed below.\n")
+        self._add_result("Press the 'Take Screenshot' button to start OCR.\n")
 
     def take_screenshot(self):
         if self.is_processing:
@@ -132,7 +181,7 @@ class ScreenshotApp:
 
             timestamp = datetime.now().strftime("%H:%M:%S")
             self._add_result(f"\n{'='*65}\n[{timestamp}] Screenshot saved: {filename}\n")
-            self._add_result("Running OCR...\n" + "="*65 + "\n\n")
+            self._add_result(f"[{timestamp}] Running OCR...\n" + "="*65 + "\n\n")
 
             threading.Thread(target=self._process_with_ocr, args=(filepath,), daemon=True).start()
 
@@ -152,11 +201,9 @@ class ScreenshotApp:
 
             timestamp = datetime.now().strftime("%H:%M:%S")
             if cleaned_text:
-                self.root.after(0, self._add_result, f"[{timestamp}] OCR Result:\n{cleaned_text}\n")
+                self.root.after(0, self._add_result, f"{cleaned_text}\n")
             else:
                 self.root.after(0, self._add_result, f"[{timestamp}] OCR Result: No text detected.\n")
-
-            self.root.after(0, self._add_result, "-" * 50 + "\n")
 
         except Exception as e:
             self.root.after(0, self._add_result, f"Error: OCR processing failed: {str(e)}\n")
