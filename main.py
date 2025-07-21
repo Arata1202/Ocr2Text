@@ -5,6 +5,7 @@ import os
 from PIL import ImageGrab
 import pytesseract
 import threading
+from config import PROMPT
 
 class ScreenshotApp:
     def __init__(self):
@@ -83,8 +84,9 @@ class ScreenshotApp:
     def _copy_all_text(self):
         try:
             all_text = self.text_widget.get("1.0", tk.END).strip()
+            text_with_append = all_text + PROMPT
             self.root.clipboard_clear()
-            self.root.clipboard_append(all_text)
+            self.root.clipboard_append(text_with_append)
             self.root.update()
             self._show_copy_feedback()
         except Exception as e:
